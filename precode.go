@@ -43,7 +43,7 @@ var tasks = map[string]Task{
 
 // Ниже напишите обработчики для каждого эндпоинта
 
-func AllTasks(w http.ResponseWriter, r *http.Request) {
+func getTasks(w http.ResponseWriter, r *http.Request) {
 	resp, err := json.Marshal(tasks)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -54,8 +54,7 @@ func AllTasks(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	// так как все успешно, то статус OK
 	w.WriteHeader(http.StatusOK)
-	// записываем сериализованные в JSON данные в тело ответа
-	w.Write(resp)
+	_, _ = w.Write(resp)
 }
 
 func postTask(w http.ResponseWriter, r *http.Request) {
@@ -70,6 +69,11 @@ func postTask(w http.ResponseWriter, r *http.Request) {
 
 	if err = json.Unmarshal(buf.Bytes(), &task); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if _, taskExists := tasks[task.ID]; taskExists {
+		// Если задача с таким ID уже существует, возвращаем ошибку 409 (Conflict)
+		http.Error(w, fmt.Sprintf("Task with ID %s already exists", task.ID), http.StatusConflict)
 		return
 	}
 
@@ -102,28 +106,20 @@ func getTask(w http.ResponseWriter, r *http.Request) {
 func taskDelete(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	task, ok := tasks[id]
+	_, ok := tasks[id]
 	if !ok {
 		http.Error(w, "Task not found(", http.StatusNotFound)
 		return
 	}
 	delete(tasks, id)
 
-	resp, err := json.Marshal(task)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	w.Write(resp)
 }
 func main() {
 	r := chi.NewRouter()
 
 	// здесь регистрируйте ваши обработчики
-	r.Get("/tasks", AllTasks)
+	r.Get("/tasks", getTasks)
 	r.Post("/tasks", postTask)
 	r.Get("/tasks/{id}", getTask)
 	r.Delete("/tasks/{id}", taskDelete)
